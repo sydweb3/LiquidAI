@@ -59,6 +59,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
+import { MobileHeader, MobileSidebar } from "@/components/MobileNav";
 
 const strategyTypeInfo = {
   arbitrage: {
@@ -135,6 +136,7 @@ export default function Strategies() {
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [selectedStrategy, setSelectedStrategy] = useState<{ id: number; name: string; type: string; parameters?: any } | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   // Form state - generic
   const [newStrategyName, setNewStrategyName] = useState("");
@@ -464,8 +466,53 @@ export default function Strategies() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 bottom-0 w-64 bg-card border-r border-border p-4 flex flex-col">
+      {/* Mobile Sidebar */}
+      <MobileSidebar
+        isOpen={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+      >
+        <div className="space-y-1">
+          <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)}>
+            <div className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors cursor-pointer">
+              <BarChart3 className="w-5 h-5" />
+              <span>Dashboard</span>
+            </div>
+          </Link>
+          <Link href="/strategies" onClick={() => setMobileMenuOpen(false)}>
+            <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary cursor-pointer">
+              <Bot className="w-5 h-5" />
+              <span className="font-medium">Strategies</span>
+            </div>
+          </Link>
+          <Link href="/portfolio" onClick={() => setMobileMenuOpen(false)}>
+            <div className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors cursor-pointer">
+              <PiggyBank className="w-5 h-5" />
+              <span>Portfolio</span>
+            </div>
+          </Link>
+          <Link href="/swap-bridge" onClick={() => setMobileMenuOpen(false)}>
+            <div className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors cursor-pointer">
+              <ArrowLeftRight className="w-5 h-5" />
+              <span>Swap/Bridge</span>
+            </div>
+          </Link>
+          <div className="pt-4 border-t border-border mt-4">
+            <button
+              onClick={() => {
+                logout();
+                setMobileMenuOpen(false);
+              }}
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+            >
+              <LogOut className="w-5 h-5" />
+              <span>Sign Out</span>
+            </button>
+          </div>
+        </div>
+      </MobileSidebar>
+
+      {/* Desktop Sidebar */}
+      <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 w-64 bg-card border-r border-border p-4 flex-col">
         <div className="flex items-center gap-2 mb-8">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
             <Zap className="w-5 h-5 text-background" />
@@ -516,9 +563,27 @@ export default function Strategies() {
       </aside>
 
       {/* Main Content */}
-      <main className="ml-64 p-8">
-        {/* Header with Wallet */}
-        <div className="flex items-center justify-between mb-8">
+      <main className="lg:ml-64 p-4 sm:p-8 pt-20 lg:pt-8">
+        {/* Mobile Header */}
+        <MobileHeader
+          title="AI Strategies"
+          subtitle="Configure and manage your automated DeFi strategies"
+          onMenuClick={() => setMobileMenuOpen(true)}
+          rightElement={
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => setCreateDialogOpen(true)}
+                size="sm"
+                className="bg-gradient-to-r from-primary to-accent"
+              >
+                <Plus className="w-4 h-4" />
+              </Button>
+            </div>
+          }
+        />
+
+        {/* Desktop Header */}
+        <div className="hidden lg:flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold">AI Strategies</h1>
             <p className="text-muted-foreground">Configure and manage your automated DeFi strategies</p>
@@ -703,7 +768,7 @@ export default function Strategies() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <Card className="bg-card/50">
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-2">
@@ -748,7 +813,7 @@ export default function Strategies() {
             <Cpu className="w-5 h-5" />
             DeFi Engine Status
           </h2>
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <EngineStatusCard 
               name="Arbitrage" 
               icon={Signal}
@@ -777,7 +842,8 @@ export default function Strategies() {
           <h2 className="text-xl font-semibold">Your Strategies</h2>
 
           {userStrategies && userStrategies.filter((s: any) => s.status !== 'stopped').length > 0 ? (
-            userStrategies.filter((s: any) => s.status !== 'stopped').map((strategy) => {
+            <div className="space-y-4">
+            {userStrategies.filter((s: any) => s.status !== 'stopped').map((strategy) => {
               const typeInfo = strategyTypeInfo[strategy.type as keyof typeof strategyTypeInfo];
               const status = statusInfo[strategy.status as keyof typeof statusInfo];
               const Icon = typeInfo?.icon || Bot;
@@ -793,8 +859,8 @@ export default function Strategies() {
 
               return (
                 <Card key={strategy.id} className="bg-card/50">
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between">
+                  <CardContent className="p-4 sm:p-6">
+                    <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
                       <div className="flex items-start gap-4">
                         <div className={`w-14 h-14 rounded-xl ${typeInfo?.bgColor} flex items-center justify-center`}>
                           <Icon className={`w-7 h-7 ${typeInfo?.color}`} />
@@ -829,7 +895,7 @@ export default function Strategies() {
                       </div>
 
                       {/* Stats & Actions */}
-                      <div className="flex items-center gap-8">
+                      <div className="w-full sm:w-auto grid grid-cols-3 sm:flex sm:items-center sm:gap-8 mt-4 sm:mt-0">
                         <div className="text-right">
                           <div className="text-sm text-muted-foreground">Est. APY</div>
                           <div className="text-xl font-bold gradient-text">{estimatedApy.toFixed(2)}%</div>
@@ -843,7 +909,7 @@ export default function Strategies() {
                           <div className="text-xl font-bold text-success">+${estimatedProfit.toFixed(4)}</div>
                         </div>
 
-                        <div className="flex items-center gap-2 ml-4">
+                        <div className="flex flex-wrap items-center gap-2 mt-4 sm:mt-0 sm:ml-4">
                           <Button
                             variant="outline"
                             size="sm"
@@ -926,7 +992,8 @@ export default function Strategies() {
                   </CardContent>
                 </Card>
               );
-            })
+            })}
+            </div>
           ) : (
             <Card className="bg-card/50">
               <CardContent className="p-12 text-center">
