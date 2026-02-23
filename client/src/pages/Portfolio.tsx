@@ -22,9 +22,11 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { MobileHeader, MobileSidebar } from "@/components/MobileNav";
 
 export default function Portfolio() {
   const { user, isAuthenticated, loading: authLoading, logout } = useAuth();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [lastRewardTime, setLastRewardTime] = useState<Date | null>(null);
   const [nextRewardIn, setNextRewardIn] = useState<number>(300); // 5 minutes in seconds
 

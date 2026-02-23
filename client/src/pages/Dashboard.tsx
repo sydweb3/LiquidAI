@@ -24,6 +24,7 @@ import {
   ArrowLeftRight
 } from "lucide-react";
 import { useState, useMemo } from "react";
+import { MobileHeader, MobileSidebar } from "@/components/MobileNav";
 import {
   AreaChart,
   Area,
@@ -63,6 +64,7 @@ const COLORS = ["#38bdf8", "#a78bfa", "#34d399", "#fbbf24", "#f87171", "#fb923c"
 
 export default function Dashboard() {
   const { user, isAuthenticated, loading: authLoading, logout } = useAuth();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [, setLocation] = useLocation();
   const [walletConnected, setWalletConnected] = useState(false);
   const [walletAddress, setWalletAddress] = useState("");
@@ -140,8 +142,51 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 bottom-0 w-64 bg-card border-r border-border p-4 flex flex-col">
+      {/* Mobile Sidebar */}
+      <MobileSidebar
+        isOpen={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+      >
+        <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)}>
+          <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary cursor-pointer">
+            <BarChart3 className="w-5 h-5" />
+            <span className="font-medium">Dashboard</span>
+          </div>
+        </Link>
+        <Link href="/strategies" onClick={() => setMobileMenuOpen(false)}>
+          <div className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors cursor-pointer">
+            <Bot className="w-5 h-5" />
+            <span>Strategies</span>
+          </div>
+        </Link>
+        <Link href="/portfolio" onClick={() => setMobileMenuOpen(false)}>
+          <div className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors cursor-pointer">
+            <PiggyBank className="w-5 h-5" />
+            <span>Portfolio</span>
+          </div>
+        </Link>
+        <Link href="/swap-bridge" onClick={() => setMobileMenuOpen(false)}>
+          <div className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors cursor-pointer">
+            <ArrowLeftRight className="w-5 h-5" />
+            <span>Swap/Bridge</span>
+          </div>
+        </Link>
+        <div className="pt-4 border-t border-border mt-4">
+          <button
+            onClick={() => {
+              logout();
+              setMobileMenuOpen(false);
+            }}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+          >
+            <LogOut className="w-5 h-5" />
+            <span>Sign Out</span>
+          </button>
+        </div>
+      </MobileSidebar>
+
+      {/* Desktop Sidebar */}
+      <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 w-64 bg-card border-r border-border p-4 flex-col">
         <div className="flex items-center gap-2 mb-8">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
             <Zap className="w-5 h-5 text-background" />
@@ -192,9 +237,16 @@ export default function Dashboard() {
       </aside>
 
       {/* Main Content */}
-      <main className="ml-64 p-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+      <main className="lg:ml-64 p-4 sm:p-8 pt-20 lg:pt-8">
+        {/* Mobile Header */}
+        <MobileHeader
+          title="Dashboard"
+          subtitle={`Welcome back, ${user?.name || "User"}`}
+          onMenuClick={() => setMobileMenuOpen(true)}
+        />
+
+        {/* Desktop Header */}
+        <div className="hidden lg:flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold">Dashboard</h1>
             <p className="text-muted-foreground">Welcome back, {user?.name || "User"}</p>
@@ -215,7 +267,7 @@ export default function Dashboard() {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <Card className="bg-card/50">
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-2">
