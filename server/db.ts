@@ -1,25 +1,23 @@
 import { eq, desc, and } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/better-sqlite3";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import {
   InsertUser, users,
   strategies, InsertStrategy, Strategy,
   positions, InsertPosition, Position,
   activityLogs, InsertActivityLog, ActivityLog,
   transactions, InsertTransaction, Transaction
-} from "../drizzle/schema";
-import Database from "better-sqlite3";
-import path from "path";
+} from "../drizzle/schema.pg";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let _client: ReturnType<typeof postgres> | null = null;
 
 export async function getDb() {
-  if (!_db) {
+  if (!_db && process.env.DATABASE_URL) {
     try {
-      let dbPath = process.env.DATABASE_URL || "./drizzle/dev.db";
-      // Remove sqlite:// prefix if present
-      dbPath = dbPath.replace("sqlite://", "");
-      const sqlite = new Database(path.resolve(dbPath));
-      _db = drizzle(sqlite);
+      _client = postgres(process.env.DATABASE_URL, { max: 10 });
+      _db = drizzle(_client);
+      console.log("[Database] Connected to PostgreSQL");
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
@@ -42,14 +40,14 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   }
 
   try {
-    const now = new Date().toISOString();
+    const now = new Date();
     const values: InsertUser = {
       openId: user.openId,
       name: user.name ?? null,
       email: user.email ?? null,
       loginMethod: user.loginMethod ?? null,
       role: user.role ?? "user",
-      lastSignedIn: typeof user.lastSignedIn === "string" ? user.lastSignedIn : now,
+      lastSignedIn: user.lastSignedIn instanceof Date ? user.lastSignedIn : now,
       createdAt: now,
       updatedAt: now,
     };

@@ -100,7 +100,7 @@ class SDKServer {
     }
 
     const sessionUserId = session.openId;
-    const signedInAt = new Date().toISOString();
+    const signedInAt = new Date();
     let user = await db.getUserByOpenId(sessionUserId);
 
     if (!user) {

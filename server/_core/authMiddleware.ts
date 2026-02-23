@@ -20,7 +20,7 @@ export async function authMiddleware(
       name: devName,
       email: devEmail,
       loginMethod: "development",
-      lastSignedIn: new Date().toISOString(),
+      lastSignedIn: new Date(),
     });
 
     // Fetch the full user record with ID
