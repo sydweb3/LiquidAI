@@ -133,8 +133,53 @@ export default function Portfolio() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 bottom-0 w-64 bg-card border-r border-border p-4 flex flex-col">
+      {/* Mobile Sidebar */}
+      <MobileSidebar
+        isOpen={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+      >
+        <div className="space-y-1">
+          <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)}>
+            <div className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors cursor-pointer">
+              <BarChart3 className="w-5 h-5" />
+              <span>Dashboard</span>
+            </div>
+          </Link>
+          <Link href="/strategies" onClick={() => setMobileMenuOpen(false)}>
+            <div className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors cursor-pointer">
+              <Bot className="w-5 h-5" />
+              <span>Strategies</span>
+            </div>
+          </Link>
+          <Link href="/portfolio" onClick={() => setMobileMenuOpen(false)}>
+            <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary cursor-pointer">
+              <PiggyBank className="w-5 h-5" />
+              <span className="font-medium">Portfolio</span>
+            </div>
+          </Link>
+          <Link href="/swap-bridge" onClick={() => setMobileMenuOpen(false)}>
+            <div className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors cursor-pointer">
+              <ArrowLeftRight className="w-5 h-5" />
+              <span>Swap/Bridge</span>
+            </div>
+          </Link>
+          <div className="pt-4 border-t border-border mt-4">
+            <button
+              onClick={() => {
+                logout();
+                setMobileMenuOpen(false);
+              }}
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+            >
+              <LogOut className="w-5 h-5" />
+              <span>Sign Out</span>
+            </button>
+          </div>
+        </div>
+      </MobileSidebar>
+
+      {/* Desktop Sidebar */}
+      <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 w-64 bg-card border-r border-border p-4 flex-col">
         <div className="flex items-center gap-2 mb-8">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
             <Zap className="w-5 h-5 text-background" />
@@ -181,9 +226,24 @@ export default function Portfolio() {
       </aside>
 
       {/* Main Content */}
-      <main className="ml-64 p-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+      <main className="lg:ml-64 p-4 sm:p-8 pt-20 lg:pt-8">
+        {/* Mobile Header */}
+        <MobileHeader
+          title="My Portfolio"
+          subtitle="Track your investments and rewards"
+          onMenuClick={() => setMobileMenuOpen(true)}
+          rightElement={
+            <div className="flex items-center gap-2">
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20">
+                <Wallet className="w-4 h-4 text-primary" />
+                <span className="text-sm font-medium">${wallet?.balanceUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}</span>
+              </div>
+            </div>
+          }
+        />
+
+        {/* Desktop Header */}
+        <div className="hidden lg:flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold">My Portfolio</h1>
             <p className="text-muted-foreground">Track your investments and rewards in real-time</p>
