@@ -12,7 +12,6 @@ import {
   TrendingDown,
   Layers,
   BarChart3,
-  Activity,
   Settings,
   LogOut,
   RefreshCw,
@@ -20,7 +19,9 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Bot,
-  Clock
+  Clock,
+  PiggyBank,
+  ArrowLeftRight
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import {
@@ -161,10 +162,16 @@ export default function Dashboard() {
               <span>Strategies</span>
             </div>
           </Link>
-          <Link href="/activity">
+          <Link href="/portfolio">
             <div className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors cursor-pointer">
-              <Activity className="w-5 h-5" />
-              <span>Activity</span>
+              <PiggyBank className="w-5 h-5" />
+              <span>Portfolio</span>
+            </div>
+          </Link>
+          <Link href="/swap-bridge">
+            <div className="flex items-center gap-3 px-3 py-2 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors cursor-pointer">
+              <ArrowLeftRight className="w-5 h-5" />
+              <span>Swap/Bridge</span>
             </div>
           </Link>
         </nav>

@@ -8,6 +8,8 @@ import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
 import Strategies from "./pages/Strategies";
 import Activity from "./pages/Activity";
+import Portfolio from "./pages/Portfolio";
+import SwapBridge from "./pages/SwapBridge";
 
 function Router() {
   return (
@@ -15,6 +17,8 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/strategies" component={Strategies} />
+      <Route path="/portfolio" component={Portfolio} />
+      <Route path="/swap-bridge" component={SwapBridge} />
       <Route path="/activity" component={Activity} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />

@@ -1,19 +1,25 @@
 import { eq, desc, and } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
-import { 
-  InsertUser, users, 
+import { drizzle } from "drizzle-orm/better-sqlite3";
+import {
+  InsertUser, users,
   strategies, InsertStrategy, Strategy,
   positions, InsertPosition, Position,
-  activityLogs, InsertActivityLog, ActivityLog
+  activityLogs, InsertActivityLog, ActivityLog,
+  transactions, InsertTransaction, Transaction
 } from "../drizzle/schema";
-import { ENV } from './_core/env';
+import Database from "better-sqlite3";
+import path from "path";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
 export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
+  if (!_db) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      let dbPath = process.env.DATABASE_URL || "./drizzle/dev.db";
+      // Remove sqlite:// prefix if present
+      dbPath = dbPath.replace("sqlite://", "");
+      const sqlite = new Database(path.resolve(dbPath));
+      _db = drizzle(sqlite);
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
@@ -36,46 +42,27 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   }
 
   try {
+    const now = new Date().toISOString();
     const values: InsertUser = {
       openId: user.openId,
-    };
-    const updateSet: Record<string, unknown> = {};
-
-    const textFields = ["name", "email", "loginMethod"] as const;
-    type TextField = (typeof textFields)[number];
-
-    const assignNullable = (field: TextField) => {
-      const value = user[field];
-      if (value === undefined) return;
-      const normalized = value ?? null;
-      values[field] = normalized;
-      updateSet[field] = normalized;
+      name: user.name ?? null,
+      email: user.email ?? null,
+      loginMethod: user.loginMethod ?? null,
+      role: user.role ?? "user",
+      lastSignedIn: typeof user.lastSignedIn === "string" ? user.lastSignedIn : now,
+      createdAt: now,
+      updatedAt: now,
     };
 
-    textFields.forEach(assignNullable);
-
-    if (user.lastSignedIn !== undefined) {
-      values.lastSignedIn = user.lastSignedIn;
-      updateSet.lastSignedIn = user.lastSignedIn;
-    }
-    if (user.role !== undefined) {
-      values.role = user.role;
-      updateSet.role = user.role;
-    } else if (user.openId === ENV.ownerOpenId) {
-      values.role = 'admin';
-      updateSet.role = 'admin';
-    }
-
-    if (!values.lastSignedIn) {
-      values.lastSignedIn = new Date();
-    }
-
-    if (Object.keys(updateSet).length === 0) {
-      updateSet.lastSignedIn = new Date();
-    }
-
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
-      set: updateSet,
+    await db.insert(users).values(values).onConflictDoUpdate({
+      target: users.openId,
+      set: {
+        name: values.name,
+        email: values.email,
+        loginMethod: values.loginMethod,
+        lastSignedIn: values.lastSignedIn,
+        updatedAt: values.updatedAt,
+      },
     });
   } catch (error) {
     console.error("[Database] Failed to upsert user:", error);
@@ -99,10 +86,10 @@ export async function updateUserWallets(userId: number, evmAddress: string, cron
   if (!db) return;
 
   await db.update(users)
-    .set({ 
-      evmAddress, 
+    .set({
+      evmAddress,
       cronosAddress: cronosAddress || evmAddress,
-      updatedAt: new Date()
+      updatedAt: new Date().toISOString()
     })
     .where(eq(users.id, userId));
 }
@@ -135,33 +122,38 @@ export async function createStrategy(strategy: InsertStrategy): Promise<number> 
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  const result = await db.insert(strategies).values(strategy);
-  return result[0].insertId;
+  const now = new Date().toISOString();
+  const result = await db.insert(strategies).values({
+    ...strategy,
+    createdAt: now,
+    updatedAt: now,
+  });
+  return result.lastInsertRowid as number;
 }
 
 export async function updateStrategy(
-  strategyId: number, 
-  userId: number, 
+  strategyId: number,
+  userId: number,
   updates: Partial<InsertStrategy>
 ): Promise<void> {
   const db = await getDb();
   if (!db) return;
 
   await db.update(strategies)
-    .set({ ...updates, updatedAt: new Date() })
+    .set({ ...updates, updatedAt: new Date().toISOString() })
     .where(and(eq(strategies.id, strategyId), eq(strategies.userId, userId)));
 }
 
 export async function updateStrategyStatus(
-  strategyId: number, 
-  userId: number, 
+  strategyId: number,
+  userId: number,
   status: "active" | "paused" | "stopped"
 ): Promise<void> {
   const db = await getDb();
   if (!db) return;
 
   await db.update(strategies)
-    .set({ status, updatedAt: new Date() })
+    .set({ status, updatedAt: new Date().toISOString() })
     .where(and(eq(strategies.id, strategyId), eq(strategies.userId, userId)));
 }
 
@@ -190,11 +182,12 @@ export async function upsertPosition(position: InsertPosition): Promise<void> {
   const db = await getDb();
   if (!db) return;
 
-  await db.insert(positions).values(position).onDuplicateKeyUpdate({
+  await db.insert(positions).values(position).onConflictDoUpdate({
+    target: positions.id,
     set: {
       balance: position.balance,
       valueUsd: position.valueUsd,
-      updatedAt: new Date()
+      updatedAt: new Date().toISOString()
     }
   });
 }
@@ -235,8 +228,12 @@ export async function createActivityLog(log: InsertActivityLog): Promise<number>
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  const result = await db.insert(activityLogs).values(log);
-  return result[0].insertId;
+  const now = new Date().toISOString();
+  const result = await db.insert(activityLogs).values({
+    ...log,
+    createdAt: now,
+  });
+  return result.lastInsertRowid as number;
 }
 
 export async function updateActivityLogStatus(
@@ -295,4 +292,100 @@ export async function getDashboardData(userId: number) {
     },
     recentActivity
   };
+}
+
+// ============ Wallet/Transaction Queries ============
+
+export async function getUserWallet(userId: number): Promise<{
+  balanceUsd: number;
+  investedUsd: number;
+  totalRewardsUsd: number;
+} | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select({
+    balanceUsd: users.balanceUsd,
+    investedUsd: users.investedUsd,
+    totalRewardsUsd: users.totalRewardsUsd
+  }).from(users).where(eq(users.id, userId)).limit(1);
+
+  if (result.length === 0) return null;
+
+  return {
+    balanceUsd: parseFloat(result[0].balanceUsd || "0"),
+    investedUsd: parseFloat(result[0].investedUsd || "0"),
+    totalRewardsUsd: parseFloat(result[0].totalRewardsUsd || "0")
+  };
+}
+
+export async function updateUserBalance(
+  userId: number,
+  balanceDelta: number,
+  investedDelta: number,
+  rewardsDelta: number
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (user.length === 0) return;
+
+  const newBalance = parseFloat(user[0].balanceUsd || "0") + balanceDelta;
+  const newInvested = parseFloat(user[0].investedUsd || "0") + investedDelta;
+  const newRewards = parseFloat(user[0].totalRewardsUsd || "0") + rewardsDelta;
+
+  await db.update(users)
+    .set({
+      balanceUsd: newBalance.toString(),
+      investedUsd: newInvested.toString(),
+      totalRewardsUsd: newRewards.toString(),
+      updatedAt: new Date().toISOString()
+    })
+    .where(eq(users.id, userId));
+}
+
+export async function createTransaction(tx: {
+  userId: number;
+  type: string;
+  amountUsd: number;
+  balanceBefore?: number;
+  balanceAfter?: number;
+  description?: string;
+  metadata?: Record<string, unknown>;
+}): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const now = new Date().toISOString();
+  const result = await db.insert(transactions).values({
+    ...tx,
+    amountUsd: tx.amountUsd.toString(),
+    balanceBefore: tx.balanceBefore?.toString(),
+    balanceAfter: tx.balanceAfter?.toString(),
+    createdAt: now
+  });
+  
+  return result.lastInsertRowid as number;
+}
+
+export async function getUserTransactions(
+  userId: number,
+  limit: number = 50
+): Promise<any[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select()
+    .from(transactions)
+    .where(eq(transactions.userId, userId))
+    .orderBy(desc(transactions.createdAt))
+    .limit(limit);
+}
+
+export async function getAllStrategies(): Promise<Strategy[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(strategies);
 }

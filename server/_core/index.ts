@@ -1,12 +1,21 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+import path from "path";
+
+// Load environment-specific env file
+const envPath = path.resolve(process.cwd(), `.env.${process.env.NODE_ENV || "development"}`);
+dotenv.config({ path: envPath });
+
 import express from "express";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
+import { authMiddleware } from "./authMiddleware";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { strategyExecutor } from "./defi";
+import { rewardScheduler } from "./rewardScheduler";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -35,6 +44,8 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
+  // Authentication middleware (development-only, no auth required)
+  app.use(authMiddleware);
   // tRPC API
   app.use(
     "/api/trpc",
@@ -57,8 +68,24 @@ async function startServer() {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
 
-  server.listen(port, () => {
+  server.listen(port, async () => {
     console.log(`Server running on http://localhost:${port}/`);
+    
+    // Initialize DeFi strategy executor
+    try {
+      await strategyExecutor.initialize();
+      console.log('[Server] DeFi strategies initialized');
+    } catch (error) {
+      console.error('[Server] Failed to initialize DeFi strategies:', error);
+    }
+
+    // Start reward distribution scheduler
+    try {
+      rewardScheduler.start();
+      console.log('[Server] Reward scheduler started (distributes every 5 min)');
+    } catch (error) {
+      console.error('[Server] Failed to start reward scheduler:', error);
+    }
   });
 }
 

@@ -1,4 +1,3 @@
-import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
@@ -13,17 +12,31 @@ import {
   getUserPositions,
   getUserActivityLogs,
   createActivityLog,
-  updateUserWallets
+  updateUserWallets,
+  getUserWallet,
+  updateUserBalance,
+  createTransaction,
+  getUserTransactions
 } from "./db";
+import {
+  strategyExecutor,
+  priceOracle,
+  dexManager,
+  arbitrageEngine,
+  liquidityEngine,
+  yieldEngine,
+  rebalancingEngine,
+  TOKENS
+} from "./_core/defi";
 
 export const appRouter = router({
   system: systemRouter,
-  
+
+  // Auth endpoints (simplified - always returns current user)
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
-      const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
+      // Development mode - no session to clear
       return { success: true } as const;
     }),
   }),
@@ -250,6 +263,222 @@ export const appRouter = router({
         { pair: "VVS/CRO", tvl: 12000000, apr: 45.67, volume24h: 890000 },
         { pair: "USDC/USDT", tvl: 67000000, apr: 8.34, volume24h: 5670000 }
       ];
+    })
+  }),
+
+  // DeFi strategy endpoints
+  defi: router({
+    // Get real-time token prices
+    getPrices: publicProcedure
+      .input(z.object({
+        tokens: z.array(z.string()).optional()
+      }).optional())
+      .query(async ({ input }) => {
+        const tokens = input?.tokens || Object.keys(TOKENS);
+        const prices = await priceOracle.getPrices(tokens);
+        return prices;
+      }),
+
+    // Get arbitrage opportunities
+    getArbitrageOpportunities: publicProcedure.query(() => {
+      return arbitrageEngine.getOpportunities();
+    }),
+
+    // Get arbitrage engine status
+    getArbitrageStatus: publicProcedure.query(() => {
+      return arbitrageEngine.getStatus();
+    }),
+
+    // Get liquidity positions
+    getLiquidityPositions: protectedProcedure
+      .input(z.object({
+        strategyId: z.number().optional()
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        if (input?.strategyId) {
+          return liquidityEngine.getPositionsForStrategy(input.strategyId);
+        }
+        return liquidityEngine.getPositionStats();
+      }),
+
+    // Get yield opportunities
+    getYieldOpportunities: publicProcedure
+      .input(z.object({
+        token: z.string().optional(),
+        limit: z.number().default(10)
+      }).optional())
+      .query(async ({ input }) => {
+        const token = input?.token as any || 'USDC';
+        return yieldEngine.getBestOpportunities(token, input?.limit);
+      }),
+
+    // Get yield portfolio stats
+    getYieldPortfolio: protectedProcedure.query(async ({ ctx }) => {
+      return yieldEngine.getPortfolioStats();
+    }),
+
+    // Get rebalancing status
+    getRebalancingStatus: protectedProcedure.query(async ({ ctx }) => {
+      return rebalancingEngine.getStats();
+    }),
+
+    // Get pending rebalance plans
+    getRebalancePlans: protectedProcedure.query(() => {
+      return rebalancingEngine.getPendingPlans();
+    }),
+
+    // Execute rebalance plan
+    executeRebalance: protectedProcedure
+      .input(z.object({
+        planId: z.string()
+      }))
+      .mutation(async ({ ctx, input }) => {
+        // In production, use actual private key from secure storage
+        const privateKey = process.env.WALLET_PRIVATE_KEY;
+        if (!privateKey) {
+          throw new Error('Private key not configured');
+        }
+        return rebalancingEngine.executePlan(input.planId, privateKey);
+      }),
+
+    // Get all engine statuses
+    getEngineStatus: publicProcedure.query(() => {
+      return strategyExecutor.getEngineStatus();
+    }),
+
+    // Get execution history for a strategy
+    getExecutionHistory: protectedProcedure
+      .input(z.object({
+        strategyId: z.number()
+      }))
+      .query(async ({ input }) => {
+        return strategyExecutor.getExecutionHistory(input.strategyId);
+      })
+  }),
+
+  // Wallet endpoints
+  wallet: router({
+    // Get user wallet balance
+    getBalance: protectedProcedure.query(async ({ ctx }) => {
+      const wallet = await getUserWallet(ctx.user.id);
+      return wallet || { balanceUsd: 10000, investedUsd: 0, totalRewardsUsd: 0 };
+    }),
+
+    // Get transaction history
+    getTransactions: protectedProcedure
+      .input(z.object({
+        limit: z.number().default(50)
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        return await getUserTransactions(ctx.user.id, input?.limit || 50);
+      }),
+
+    // Deposit funds (add to balance)
+    deposit: protectedProcedure
+      .input(z.object({
+        amount: z.number().positive()
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const wallet = await getUserWallet(ctx.user.id);
+        if (!wallet) throw new Error('Wallet not found');
+
+        await updateUserBalance(ctx.user.id, input.amount, 0, 0);
+        
+        await createTransaction({
+          userId: ctx.user.id,
+          type: 'deposit',
+          amountUsd: input.amount,
+          balanceBefore: wallet.balanceUsd,
+          balanceAfter: wallet.balanceUsd + input.amount,
+          description: 'Deposit funds'
+        });
+
+        return { success: true, newBalance: wallet.balanceUsd + input.amount };
+      }),
+
+    // Invest in strategy
+    invest: protectedProcedure
+      .input(z.object({
+        strategyId: z.number(),
+        amount: z.number().positive()
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const wallet = await getUserWallet(ctx.user.id);
+        if (!wallet) throw new Error('Wallet not found');
+
+        if (wallet.balanceUsd < input.amount) {
+          throw new Error('Insufficient balance');
+        }
+
+        // Update strategy's totalDeposited
+        const db = await import('./db');
+        const strategy = await db.getStrategyById(input.strategyId, ctx.user.id);
+        if (!strategy) throw new Error('Strategy not found');
+
+        const newTotalDeposited = parseFloat(strategy.totalDeposited || '0') + input.amount;
+        await db.updateStrategy(input.strategyId, ctx.user.id, {
+          totalDeposited: newTotalDeposited.toString()
+        });
+
+        // Deduct from balance, add to invested
+        await updateUserBalance(ctx.user.id, -input.amount, input.amount, 0);
+
+        await createTransaction({
+          userId: ctx.user.id,
+          type: 'invest',
+          amountUsd: input.amount,
+          balanceBefore: wallet.balanceUsd,
+          balanceAfter: wallet.balanceUsd - input.amount,
+          description: `Invest in strategy ${input.strategyId}`,
+          metadata: { strategyId: input.strategyId }
+        });
+
+        return { 
+          success: true, 
+          newBalance: wallet.balanceUsd - input.amount,
+          newInvested: wallet.investedUsd + input.amount
+        };
+      }),
+
+    // Withdraw from strategy
+    withdraw: protectedProcedure
+      .input(z.object({
+        strategyId: z.number(),
+        amount: z.number().positive()
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const wallet = await getUserWallet(ctx.user.id);
+        if (!wallet) throw new Error('Wallet not found');
+
+        if (wallet.investedUsd < input.amount) {
+          throw new Error('Insufficient invested amount');
+        }
+
+        // Deduct from invested, add to balance
+        await updateUserBalance(ctx.user.id, input.amount, -input.amount, 0);
+
+        await createTransaction({
+          userId: ctx.user.id,
+          type: 'withdraw_invest',
+          amountUsd: input.amount,
+          balanceBefore: wallet.balanceUsd,
+          balanceAfter: wallet.balanceUsd + input.amount,
+          description: `Withdraw from strategy ${input.strategyId}`,
+          metadata: { strategyId: input.strategyId }
+        });
+
+        return { 
+          success: true, 
+          newBalance: wallet.balanceUsd + input.amount,
+          newInvested: wallet.investedUsd - input.amount
+        };
+      }),
+
+    // Claim rewards
+    claimRewards: protectedProcedure.mutation(async ({ ctx }) => {
+      const { rewardScheduler } = await import('./_core/rewardScheduler');
+      const reward = await rewardScheduler.claimRewards(ctx.user.id);
+      return { success: true, reward };
     })
   })
 });
